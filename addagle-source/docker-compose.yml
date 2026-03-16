@@ -1,0 +1,76 @@
+version: '3.9'
+
+services:
+  # ── MongoDB ─────────────────────────────────────────────────────────────────
+  mongo:
+    image: mongo:7.0
+    container_name: addagle-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: addagle
+    networks:
+      - addagle-net
+
+  # ── Redis ────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7.2-alpine
+    container_name: addagle-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    networks:
+      - addagle-net
+
+  # ── Backend ──────────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: addagle-backend
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      MONGODB_URI: mongodb://mongo:27017/addagle
+      REDIS_URL: redis://redis:6379
+      FRONTEND_URL: http://localhost:3000
+      JWT_SECRET: ${JWT_SECRET:-changeme_in_production}
+    depends_on:
+      - mongo
+      - redis
+    networks:
+      - addagle-net
+
+  # ── Frontend ─────────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: addagle-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+      NEXT_PUBLIC_SOCKET_URL: http://localhost:3001
+    depends_on:
+      - backend
+    networks:
+      - addagle-net
+
+volumes:
+  mongo_data:
+  redis_data:
+
+networks:
+  addagle-net:
+    driver: bridge
